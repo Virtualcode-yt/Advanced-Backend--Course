@@ -1,0 +1,20 @@
+{
+  "name": "phase1",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "bullmq": "^5.78.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "ioredis": "^5.11.0",
+    "mongoose": "^9.6.3",
+    "nodemon": "^3.1.14"
+  }
+}

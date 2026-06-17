@@ -1,0 +1,135 @@
+import { TavilyMapAPIWrapper } from "./utils.js";
+import { StructuredTool } from "@langchain/core/tools";
+import { z } from "zod/v3";
+
+//#region src/tavily-map.ts
+function generateSuggestions(params) {
+	const suggestions = [];
+	const { selectPaths, selectDomains, excludeDomains } = params;
+	if (!selectPaths || Array.isArray(selectPaths) && selectPaths.length === 0) suggestions.push("Try adding specific path filters using selectPaths");
+	if (!selectDomains || Array.isArray(selectDomains) && selectDomains.length === 0) suggestions.push("Try adding domain filters using selectDomains");
+	if (!excludeDomains || Array.isArray(excludeDomains) && excludeDomains.length === 0) suggestions.push("Try excluding specific domains using excludeDomains");
+	return suggestions;
+}
+const inputSchema = z.object({
+	url: z.string().describe("URL to map"),
+	instructions: z.string().optional().describe("Natural language instructions for the crawler. Example: 'Python SDK'"),
+	selectPaths: z.array(z.string()).optional().describe("Regex patterns to select only URLs with specific path patterns. Example: ['/api/v1.*']"),
+	selectDomains: z.array(z.string()).optional().describe("Regex patterns to select only URLs from specific domains or subdomains. Example: ['^docs\\.example\\.com$']"),
+	excludePaths: z.array(z.string()).optional().describe("Regex patterns to exclude URLs with specific path patterns. Example: ['/private/.*', '/admin/.*']"),
+	excludeDomains: z.array(z.string()).optional().describe("Regex patterns to exclude specific domains or subdomains from crawling. Example: ['^private\\.example\\.com$']"),
+	allowExternal: z.boolean().optional().describe("Whether to allow following links that go to external domains."),
+	categories: z.array(z.enum([
+		"Documentation",
+		"Blog",
+		"Blogs",
+		"Community",
+		"About",
+		"Contact",
+		"Privacy",
+		"Terms",
+		"Status",
+		"Pricing",
+		"Enterprise",
+		"Careers",
+		"E-Commerce",
+		"Authentication",
+		"Developer",
+		"Developers",
+		"Solutions",
+		"Partners",
+		"Downloads",
+		"Media",
+		"Events",
+		"People"
+	])).optional().describe("Filter URLs using predefined categories like 'Documentation', 'Blogs', etc.")
+});
+var TavilyMap = class extends StructuredTool {
+	static lc_name() {
+		return "tavily_map";
+	}
+	name = "tavily_map";
+	description = "Creates a comprehensive site map by crawling a website starting from a specified base URL. The tool returns a list of discovered URLs, making it ideal for understanding website structure, discovering content, and mapping out site architecture. You can control how deep and wide it goes, and guide it to focus on specific sections of the site.";
+	schema = inputSchema;
+	apiBaseUrl;
+	maxDepth;
+	maxBreadth;
+	limit;
+	instructions;
+	selectPaths;
+	selectDomains;
+	excludePaths;
+	excludeDomains;
+	allowExternal;
+	categories;
+	includeUsage;
+	apiWrapper;
+	constructor(params = {}) {
+		super(params);
+		if (typeof params.name === "string") this.name = params.name;
+		if (typeof params.description === "string") this.description = params.description;
+		if (params.apiWrapper) this.apiWrapper = params.apiWrapper;
+		else {
+			const apiWrapperParams = {};
+			if (params.tavilyApiKey) apiWrapperParams.tavilyApiKey = params.tavilyApiKey;
+			if (params.apiBaseUrl) apiWrapperParams.apiBaseUrl = params.apiBaseUrl;
+			this.apiWrapper = new TavilyMapAPIWrapper(apiWrapperParams);
+		}
+		this.maxDepth = params.maxDepth;
+		this.maxBreadth = params.maxBreadth;
+		this.limit = params.limit;
+		this.instructions = params.instructions;
+		this.selectPaths = params.selectPaths;
+		this.selectDomains = params.selectDomains;
+		this.excludePaths = params.excludePaths;
+		this.excludeDomains = params.excludeDomains;
+		this.allowExternal = params.allowExternal;
+		this.categories = params.categories;
+		this.includeUsage = params.includeUsage;
+	}
+	async _call(input, _runManager) {
+		try {
+			const { url, instructions, selectPaths, selectDomains, excludePaths, excludeDomains, allowExternal, categories } = input;
+			const effectiveMaxDepth = this.maxDepth;
+			const effectiveMaxBreadth = this.maxBreadth;
+			const effectiveLimit = this.limit;
+			const effectiveInstructions = this.instructions ?? instructions;
+			const effectiveSelectPaths = this.selectPaths ?? selectPaths;
+			const effectiveSelectDomains = this.selectDomains ?? selectDomains;
+			const effectiveExcludePaths = this.excludePaths ?? excludePaths;
+			const effectiveExcludeDomains = this.excludeDomains ?? excludeDomains;
+			const effectiveAllowExternal = this.allowExternal ?? allowExternal;
+			let effectiveCategories;
+			if (this.categories) effectiveCategories = Array.from(new Set(this.categories));
+			else if (categories) effectiveCategories = Array.from(new Set(categories));
+			else effectiveCategories = categories;
+			const rawResults = await this.apiWrapper.rawResults({
+				url,
+				maxDepth: effectiveMaxDepth,
+				maxBreadth: effectiveMaxBreadth,
+				limit: effectiveLimit,
+				instructions: effectiveInstructions,
+				selectPaths: effectiveSelectPaths,
+				selectDomains: effectiveSelectDomains,
+				excludePaths: effectiveExcludePaths,
+				excludeDomains: effectiveExcludeDomains,
+				allowExternal: effectiveAllowExternal,
+				categories: effectiveCategories,
+				includeUsage: this.includeUsage
+			});
+			if (!rawResults || typeof rawResults !== "object" || !("results" in rawResults) || !Array.isArray(rawResults.results) || rawResults.results.length === 0) {
+				const suggestions = generateSuggestions(input);
+				const errorMessage = `No map results found for '${url}'. Suggestions: ${suggestions.join(", ")}. Try modifying your map parameters with one of these approaches.`;
+				throw new Error(errorMessage);
+			}
+			return rawResults;
+		} catch (e) {
+			const errorMessage = e && typeof e === "object" && "message" in e ? e.message : String(e);
+			return { error: errorMessage };
+		}
+	}
+};
+
+//#endregion
+export { TavilyMap };
+//# sourceMappingURL=tavily-map.js.map

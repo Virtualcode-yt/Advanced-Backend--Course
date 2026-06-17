@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env 
+    ports:
+      - 8000:7000
+    
+  frontend:
+    build: ./frontend
+    ports:
+      - 5173:5173
+
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
